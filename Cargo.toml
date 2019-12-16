@@ -36,9 +36,10 @@ url_serde = "^0.2.0"
 
 [dev-dependencies]
 http = "^0.1"
-mockito = "^0.22"
 proptest = "^0.9"
 tokio = "^0.1"
+httptest = "^0.3.3"
+http02 = { version = "^0.2", package = "http" }
 
 [features]
 failpoints = [ "fail/failpoints" ]

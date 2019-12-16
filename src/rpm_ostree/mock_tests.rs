@@ -1,53 +1,55 @@
 use crate::cincinnati::Cincinnati;
 use crate::identity::Identity;
-use mockito::{self, Matcher};
+use httptest::{mappers::*, responders::*, Expectation, Times};
+use serde_json::json;
 use std::collections::BTreeSet;
 use tokio::runtime::current_thread as rt;
 
 #[test]
 fn test_simple_graph() {
-    let simple_graph = r#"
-{
-  "nodes": [
+    let simple_graph = json!(
     {
-      "version": "0.0.0-mock",
-      "metadata": {
-        "org.fedoraproject.coreos.scheme": "checksum",
-        "org.fedoraproject.coreos.releases.age_index": "0"
-      },
-      "payload": "sha-mock"
-    },
-    {
-      "version": "30.20190725.0",
-      "metadata": {
-        "org.fedoraproject.coreos.scheme": "checksum",
-        "org.fedoraproject.coreos.releases.age_index": "1"
-      },
-      "payload": "8b79877efa7ac06becd8637d95f8ca83aa385f89f383288bf3c2c31ca53216c7"
-    }
-  ],
-  "edges": [
-    [
-      0,
-      1
-    ]
-  ]
-}
-"#;
-
-    let m_graph = mockito::mock("GET", Matcher::Regex(r"^/v1/graph?.+$".to_string()))
-        .match_header("accept", Matcher::Regex("application/json".to_string()))
-        .with_body(&simple_graph)
-        .with_status(200)
-        .create();
+      "nodes": [
+        {
+          "version": "0.0.0-mock",
+          "metadata": {
+            "org.fedoraproject.coreos.scheme": "checksum",
+            "org.fedoraproject.coreos.releases.age_index": "0"
+          },
+          "payload": "sha-mock"
+        },
+        {
+          "version": "30.20190725.0",
+          "metadata": {
+            "org.fedoraproject.coreos.scheme": "checksum",
+            "org.fedoraproject.coreos.releases.age_index": "1"
+          },
+          "payload": "8b79877efa7ac06becd8637d95f8ca83aa385f89f383288bf3c2c31ca53216c7"
+        }
+      ],
+      "edges": [
+        [
+          0,
+          1
+        ]
+      ]
+    });
+    let server = httptest::Server::run();
+    server.expect(
+        Expectation::matching(all_of![
+            request::method("GET"),
+            request::path(matches(r"^/v1/graph?.+$")),
+            request::headers(contains_entry(("accept", matches("application/json")),)),
+        ])
+        .respond_with(json_encoded(simple_graph)),
+    );
 
     let id = Identity::mock_default();
     let client = Cincinnati {
-        base_url: mockito::server_url(),
+        base_url: server.url_str("/"),
     };
     let update =
         rt::block_on_all(client.fetch_update_hint(&id, BTreeSet::new(), true, false)).unwrap();
-    m_graph.assert();
 
     let next = update.unwrap();
     assert_eq!(next.version, "30.20190725.0")
@@ -55,45 +57,47 @@ fn test_simple_graph() {
 
 #[test]
 fn test_downgrade() {
-    let simple_graph = r#"
-{
-  "nodes": [
+    let simple_graph = json!(
     {
-      "version": "30.20190725.0",
-      "metadata": {
-        "org.fedoraproject.coreos.scheme": "checksum",
-        "org.fedoraproject.coreos.releases.age_index": "0"
-      },
-      "payload": "8b79877efa7ac06becd8637d95f8ca83aa385f89f383288bf3c2c31ca53216c7"
-    },
-    {
-      "version": "0.0.0-mock",
-      "metadata": {
-        "org.fedoraproject.coreos.scheme": "checksum",
-        "org.fedoraproject.coreos.releases.age_index": "1"
-      },
-      "payload": "sha-mock"
-    }
-  ],
-  "edges": [
-    [
-      1,
-      0
-    ]
-  ]
-}
-"#;
-
-    let m_graph = mockito::mock("GET", Matcher::Regex(r"^/v1/graph?.+$".to_string()))
-        .match_header("accept", Matcher::Regex("application/json".to_string()))
-        .with_body(&simple_graph)
-        .with_status(200)
-        .expect(2)
-        .create();
+      "nodes": [
+        {
+          "version": "30.20190725.0",
+          "metadata": {
+            "org.fedoraproject.coreos.scheme": "checksum",
+            "org.fedoraproject.coreos.releases.age_index": "0"
+          },
+          "payload": "8b79877efa7ac06becd8637d95f8ca83aa385f89f383288bf3c2c31ca53216c7"
+        },
+        {
+          "version": "0.0.0-mock",
+          "metadata": {
+            "org.fedoraproject.coreos.scheme": "checksum",
+            "org.fedoraproject.coreos.releases.age_index": "1"
+          },
+          "payload": "sha-mock"
+        }
+      ],
+      "edges": [
+        [
+          1,
+          0
+        ]
+      ]
+    });
+    let server = httptest::Server::run();
+    server.expect(
+        Expectation::matching(all_of![
+            request::method("GET"),
+            request::path(matches(r"^/v1/graph?.+$")),
+            request::headers(contains_entry(("accept", matches("application/json")))),
+        ])
+        .times(Times::Exactly(2))
+        .respond_with(json_encoded(simple_graph)),
+    );
 
     let id = Identity::mock_default();
     let client = Cincinnati {
-        base_url: mockito::server_url(),
+        base_url: server.url_str("/"),
     };
 
     // Downgrades denied.
@@ -105,7 +109,6 @@ fn test_downgrade() {
     let downgrade =
         rt::block_on_all(client.fetch_update_hint(&id, BTreeSet::new(), true, true)).unwrap();
 
-    m_graph.assert();
     let next = downgrade.unwrap();
     assert_eq!(next.version, "30.20190725.0")
 }
