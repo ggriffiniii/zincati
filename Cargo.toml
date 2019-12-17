@@ -38,7 +38,7 @@ url_serde = "^0.2.0"
 http = "^0.1"
 proptest = "^0.9"
 tokio = "^0.1"
-httptest = "^0.3.3"
+httptest = "^0.5"
 http02 = { version = "^0.2", package = "http" }
 
 [features]

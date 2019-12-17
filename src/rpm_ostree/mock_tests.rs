@@ -1,6 +1,6 @@
 use crate::cincinnati::Cincinnati;
 use crate::identity::Identity;
-use httptest::{mappers::*, responders::*, Expectation, Times};
+use httptest::{mappers::*, responders::*, Expectation};
 use serde_json::json;
 use std::collections::BTreeSet;
 use tokio::runtime::current_thread as rt;
@@ -91,7 +91,7 @@ fn test_downgrade() {
             request::path(matches(r"^/v1/graph?.+$")),
             request::headers(contains_entry(("accept", matches("application/json")))),
         ])
-        .times(Times::Exactly(2))
+        .times(2..=2)
         .respond_with(json_encoded(simple_graph)),
     );
 
